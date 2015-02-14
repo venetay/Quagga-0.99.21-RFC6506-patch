@@ -19,3 +19,8 @@ both AT bit on an interface/area and key-id with sha-256 password.
 
 Tata Consultancy Services (TCS) providing the implementation code for RFC-6506, developed and tested on 
 quagga-0.99.21 version. 
+
+http://www.gossamer-threads.com/lists/quagga/dev/24965
+
+http://tools.ietf.org/html/rfc6506
+http://tools.ietf.org/html/rfc7166
