@@ -25,3 +25,15 @@ http://www.gossamer-threads.com/lists/quagga/dev/24965
 http://tools.ietf.org/html/rfc6506
 
 http://tools.ietf.org/html/rfc7166
+
+
+
+
+# Install
+
+./configure --enable-user=root --enable-group=root --enable-vty-group=root --prefix=/usr/local --sysconfdir=/usr/local/etc/quagga --localstatedir=/usr/local/var/state/quagga 
+
+sudo make
+
+sudo make install 
+
