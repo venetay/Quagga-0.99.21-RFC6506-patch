@@ -1,0 +1,1943 @@
+diff -upwbNr quagga-0.99.21/lib/Makefile.am quaggaRFC6506/lib/Makefile.am
+--- quagga-0.99.21/lib/Makefile.am	2012-05-02 01:10:14.000000000 +0530
++++ quaggaRFC6506/lib/Makefile.am	2013-01-16 04:56:23.000000000 +0530
+@@ -11,7 +11,7 @@ libzebra_la_SOURCES = \
+ 	checksum.c vector.c linklist.c vty.c command.c \
+ 	sockunion.c prefix.c thread.c if.c memory.c buffer.c table.c hash.c \
+ 	filter.c routemap.c distribute.c stream.c str.c log.c plist.c \
+-	zclient.c sockopt.c smux.c md5.c if_rmap.c keychain.c privs.c \
++	zclient.c sockopt.c smux.c md5.c sha256.c if_rmap.c keychain.c privs.c \
+ 	sigevent.c pqueue.c jhash.c memtypes.c workqueue.c
+ 
+ BUILT_SOURCES = memtypes.h route_types.h
+@@ -25,7 +25,7 @@ pkginclude_HEADERS = \
+ 	if.h linklist.h log.h \
+ 	memory.h network.h prefix.h routemap.h distribute.h sockunion.h \
+ 	str.h stream.h table.h thread.h vector.h version.h vty.h zebra.h \
+-	plist.h zclient.h sockopt.h smux.h md5.h if_rmap.h keychain.h \
++	plist.h zclient.h sockopt.h smux.h md5.h sha256.h if_rmap.h keychain.h \
+ 	privs.h sigevent.h pqueue.h jhash.h zassert.h memtypes.h \
+ 	workqueue.h route_types.h
+ 
+diff -upwbNr quagga-0.99.21/lib/Makefile.in quaggaRFC6506/lib/Makefile.in
+--- quagga-0.99.21/lib/Makefile.in	2012-05-02 02:18:06.000000000 +0530
++++ quaggaRFC6506/lib/Makefile.in	2013-01-16 05:00:59.000000000 +0530
+@@ -100,7 +100,7 @@ am_libzebra_la_OBJECTS = network.lo pid_
+ 	daemon.lo checksum.lo vector.lo linklist.lo vty.lo command.lo \
+ 	sockunion.lo prefix.lo thread.lo if.lo memory.lo buffer.lo \
+ 	table.lo hash.lo filter.lo routemap.lo distribute.lo stream.lo \
+-	str.lo log.lo plist.lo zclient.lo sockopt.lo smux.lo md5.lo \
++	str.lo log.lo plist.lo zclient.lo sockopt.lo smux.lo md5.lo sha256.lo\
+ 	if_rmap.lo keychain.lo privs.lo sigevent.lo pqueue.lo jhash.lo \
+ 	memtypes.lo workqueue.lo
+ libzebra_la_OBJECTS = $(am_libzebra_la_OBJECTS)
+@@ -305,7 +305,7 @@ libzebra_la_SOURCES = \
+ 	checksum.c vector.c linklist.c vty.c command.c \
+ 	sockunion.c prefix.c thread.c if.c memory.c buffer.c table.c hash.c \
+ 	filter.c routemap.c distribute.c stream.c str.c log.c plist.c \
+-	zclient.c sockopt.c smux.c md5.c if_rmap.c keychain.c privs.c \
++	zclient.c sockopt.c smux.c md5.c sha256.c if_rmap.c keychain.c privs.c \
+ 	sigevent.c pqueue.c jhash.c memtypes.c workqueue.c
+ 
+ BUILT_SOURCES = memtypes.h route_types.h
+@@ -316,7 +316,7 @@ pkginclude_HEADERS = \
+ 	if.h linklist.h log.h \
+ 	memory.h network.h prefix.h routemap.h distribute.h sockunion.h \
+ 	str.h stream.h table.h thread.h vector.h version.h vty.h zebra.h \
+-	plist.h zclient.h sockopt.h smux.h md5.h if_rmap.h keychain.h \
++	plist.h zclient.h sockopt.h smux.h md5.h sha256.h if_rmap.h keychain.h \
+ 	privs.h sigevent.h pqueue.h jhash.h zassert.h memtypes.h \
+ 	workqueue.h route_types.h
+ 
+diff -upwbNr quagga-0.99.21/lib/memtypes.c quaggaRFC6506/lib/memtypes.c
+--- quagga-0.99.21/lib/memtypes.c	2012-05-01 21:40:28.000000000 +0530
++++ quaggaRFC6506/lib/memtypes.c	2013-02-05 14:18:50.000000000 +0530
+@@ -216,6 +216,7 @@ struct memory_list memory_list_ospf6[] =
+ {
+   { MTYPE_OSPF6_TOP,          "OSPF6 top"			},
+   { MTYPE_OSPF6_AREA,         "OSPF6 area"			},
++  { MTYPE_OSPF6_CRYPT_KEY,    "OSPF6 crypt key"			},  
+   { MTYPE_OSPF6_IF,           "OSPF6 interface"			},
+   { MTYPE_OSPF6_NEIGHBOR,     "OSPF6 neighbor"			},
+   { MTYPE_OSPF6_ROUTE,        "OSPF6 route"			},
+diff -upwbNr quagga-0.99.21/lib/memtypes.h quaggaRFC6506/lib/memtypes.h
+--- quagga-0.99.21/lib/memtypes.h	2012-05-01 22:15:24.000000000 +0530
++++ quaggaRFC6506/lib/memtypes.h	2013-01-16 04:56:22.000000000 +0530
+@@ -166,6 +166,7 @@ enum
+   MTYPE_OSPF_MESSAGE,
+   MTYPE_OSPF6_TOP,
+   MTYPE_OSPF6_AREA,
++  MTYPE_OSPF6_CRYPT_KEY,
+   MTYPE_OSPF6_IF,
+   MTYPE_OSPF6_NEIGHBOR,
+   MTYPE_OSPF6_ROUTE,
+diff -upwbNr quagga-0.99.21/lib/sha256.c quaggaRFC6506/lib/sha256.c
+--- quagga-0.99.21/lib/sha256.c	1970-01-01 05:30:00.000000000 +0530
++++ quaggaRFC6506/lib/sha256.c	2013-01-16 04:56:22.000000000 +0530
+@@ -0,0 +1,369 @@
++/*
++ *  FIPS-180-2 compliant SHA-256 implementation
++ *
++ *  Copyright (C) 2001-2003  Christophe Devine
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation; either version 2 of the License, or
++ *  (at your option) any later version.
++ *
++ *  This program is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++#include <string.h>
++
++#include "sha256.h"
++
++#define GET_UINT32(n,b,i)                       \
++{                                               \
++    (n) = ( (uint32) (b)[(i)    ] << 24 )       \
++        | ( (uint32) (b)[(i) + 1] << 16 )       \
++        | ( (uint32) (b)[(i) + 2] <<  8 )       \
++        | ( (uint32) (b)[(i) + 3]       );      \
++}
++
++#define PUT_UINT32(n,b,i)                       \
++{                                               \
++    (b)[(i)    ] = (uint8) ( (n) >> 24 );       \
++    (b)[(i) + 1] = (uint8) ( (n) >> 16 );       \
++    (b)[(i) + 2] = (uint8) ( (n) >>  8 );       \
++    (b)[(i) + 3] = (uint8) ( (n)       );       \
++}
++
++void sha256_starts( sha256_context *ctx )
++{
++    ctx->total[0] = 0;
++    ctx->total[1] = 0;
++
++    ctx->state[0] = 0x6A09E667;
++    ctx->state[1] = 0xBB67AE85;
++    ctx->state[2] = 0x3C6EF372;
++    ctx->state[3] = 0xA54FF53A;
++    ctx->state[4] = 0x510E527F;
++    ctx->state[5] = 0x9B05688C;
++    ctx->state[6] = 0x1F83D9AB;
++    ctx->state[7] = 0x5BE0CD19;
++}
++
++void sha256_process( sha256_context *ctx, uint8 data[64] )
++{
++    uint32 temp1, temp2, W[64];
++    uint32 A, B, C, D, E, F, G, H;
++
++    GET_UINT32( W[0],  data,  0 );
++    GET_UINT32( W[1],  data,  4 );
++    GET_UINT32( W[2],  data,  8 );
++    GET_UINT32( W[3],  data, 12 );
++    GET_UINT32( W[4],  data, 16 );
++    GET_UINT32( W[5],  data, 20 );
++    GET_UINT32( W[6],  data, 24 );
++    GET_UINT32( W[7],  data, 28 );
++    GET_UINT32( W[8],  data, 32 );
++    GET_UINT32( W[9],  data, 36 );
++    GET_UINT32( W[10], data, 40 );
++    GET_UINT32( W[11], data, 44 );
++    GET_UINT32( W[12], data, 48 );
++    GET_UINT32( W[13], data, 52 );
++    GET_UINT32( W[14], data, 56 );
++    GET_UINT32( W[15], data, 60 );
++
++#define  SHR(x,n) ((x & 0xFFFFFFFF) >> n)
++#define ROTR(x,n) (SHR(x,n) | (x << (32 - n)))
++
++#define S0(x) (ROTR(x, 7) ^ ROTR(x,18) ^  SHR(x, 3))
++#define S1(x) (ROTR(x,17) ^ ROTR(x,19) ^  SHR(x,10))
++
++#define S2(x) (ROTR(x, 2) ^ ROTR(x,13) ^ ROTR(x,22))
++#define S3(x) (ROTR(x, 6) ^ ROTR(x,11) ^ ROTR(x,25))
++
++#define F0(x,y,z) ((x & y) | (z & (x | y)))
++#define F1(x,y,z) (z ^ (x & (y ^ z)))
++
++#define R(t)                                    \
++(                                               \
++    W[t] = S1(W[t -  2]) + W[t -  7] +          \
++           S0(W[t - 15]) + W[t - 16]            \
++)
++
++#define P(a,b,c,d,e,f,g,h,x,K)                  \
++{                                               \
++    temp1 = h + S3(e) + F1(e,f,g) + K + x;      \
++    temp2 = S2(a) + F0(a,b,c);                  \
++    d += temp1; h = temp1 + temp2;              \
++}
++
++    A = ctx->state[0];
++    B = ctx->state[1];
++    C = ctx->state[2];
++    D = ctx->state[3];
++    E = ctx->state[4];
++    F = ctx->state[5];
++    G = ctx->state[6];
++    H = ctx->state[7];
++
++    P( A, B, C, D, E, F, G, H, W[ 0], 0x428A2F98 );
++    P( H, A, B, C, D, E, F, G, W[ 1], 0x71374491 );
++    P( G, H, A, B, C, D, E, F, W[ 2], 0xB5C0FBCF );
++    P( F, G, H, A, B, C, D, E, W[ 3], 0xE9B5DBA5 );
++    P( E, F, G, H, A, B, C, D, W[ 4], 0x3956C25B );
++    P( D, E, F, G, H, A, B, C, W[ 5], 0x59F111F1 );
++    P( C, D, E, F, G, H, A, B, W[ 6], 0x923F82A4 );
++    P( B, C, D, E, F, G, H, A, W[ 7], 0xAB1C5ED5 );
++    P( A, B, C, D, E, F, G, H, W[ 8], 0xD807AA98 );
++    P( H, A, B, C, D, E, F, G, W[ 9], 0x12835B01 );
++    P( G, H, A, B, C, D, E, F, W[10], 0x243185BE );
++    P( F, G, H, A, B, C, D, E, W[11], 0x550C7DC3 );
++    P( E, F, G, H, A, B, C, D, W[12], 0x72BE5D74 );
++    P( D, E, F, G, H, A, B, C, W[13], 0x80DEB1FE );
++    P( C, D, E, F, G, H, A, B, W[14], 0x9BDC06A7 );
++    P( B, C, D, E, F, G, H, A, W[15], 0xC19BF174 );
++    P( A, B, C, D, E, F, G, H, R(16), 0xE49B69C1 );
++    P( H, A, B, C, D, E, F, G, R(17), 0xEFBE4786 );
++    P( G, H, A, B, C, D, E, F, R(18), 0x0FC19DC6 );
++    P( F, G, H, A, B, C, D, E, R(19), 0x240CA1CC );
++    P( E, F, G, H, A, B, C, D, R(20), 0x2DE92C6F );
++    P( D, E, F, G, H, A, B, C, R(21), 0x4A7484AA );
++    P( C, D, E, F, G, H, A, B, R(22), 0x5CB0A9DC );
++    P( B, C, D, E, F, G, H, A, R(23), 0x76F988DA );
++    P( A, B, C, D, E, F, G, H, R(24), 0x983E5152 );
++    P( H, A, B, C, D, E, F, G, R(25), 0xA831C66D );
++    P( G, H, A, B, C, D, E, F, R(26), 0xB00327C8 );
++    P( F, G, H, A, B, C, D, E, R(27), 0xBF597FC7 );
++    P( E, F, G, H, A, B, C, D, R(28), 0xC6E00BF3 );
++    P( D, E, F, G, H, A, B, C, R(29), 0xD5A79147 );
++    P( C, D, E, F, G, H, A, B, R(30), 0x06CA6351 );
++    P( B, C, D, E, F, G, H, A, R(31), 0x14292967 );
++    P( A, B, C, D, E, F, G, H, R(32), 0x27B70A85 );
++    P( H, A, B, C, D, E, F, G, R(33), 0x2E1B2138 );
++    P( G, H, A, B, C, D, E, F, R(34), 0x4D2C6DFC );
++    P( F, G, H, A, B, C, D, E, R(35), 0x53380D13 );
++    P( E, F, G, H, A, B, C, D, R(36), 0x650A7354 );
++    P( D, E, F, G, H, A, B, C, R(37), 0x766A0ABB );
++    P( C, D, E, F, G, H, A, B, R(38), 0x81C2C92E );
++    P( B, C, D, E, F, G, H, A, R(39), 0x92722C85 );
++    P( A, B, C, D, E, F, G, H, R(40), 0xA2BFE8A1 );
++    P( H, A, B, C, D, E, F, G, R(41), 0xA81A664B );
++    P( G, H, A, B, C, D, E, F, R(42), 0xC24B8B70 );
++    P( F, G, H, A, B, C, D, E, R(43), 0xC76C51A3 );
++    P( E, F, G, H, A, B, C, D, R(44), 0xD192E819 );
++    P( D, E, F, G, H, A, B, C, R(45), 0xD6990624 );
++    P( C, D, E, F, G, H, A, B, R(46), 0xF40E3585 );
++    P( B, C, D, E, F, G, H, A, R(47), 0x106AA070 );
++    P( A, B, C, D, E, F, G, H, R(48), 0x19A4C116 );
++    P( H, A, B, C, D, E, F, G, R(49), 0x1E376C08 );
++    P( G, H, A, B, C, D, E, F, R(50), 0x2748774C );
++    P( F, G, H, A, B, C, D, E, R(51), 0x34B0BCB5 );
++    P( E, F, G, H, A, B, C, D, R(52), 0x391C0CB3 );
++    P( D, E, F, G, H, A, B, C, R(53), 0x4ED8AA4A );
++    P( C, D, E, F, G, H, A, B, R(54), 0x5B9CCA4F );
++    P( B, C, D, E, F, G, H, A, R(55), 0x682E6FF3 );
++    P( A, B, C, D, E, F, G, H, R(56), 0x748F82EE );
++    P( H, A, B, C, D, E, F, G, R(57), 0x78A5636F );
++    P( G, H, A, B, C, D, E, F, R(58), 0x84C87814 );
++    P( F, G, H, A, B, C, D, E, R(59), 0x8CC70208 );
++    P( E, F, G, H, A, B, C, D, R(60), 0x90BEFFFA );
++    P( D, E, F, G, H, A, B, C, R(61), 0xA4506CEB );
++    P( C, D, E, F, G, H, A, B, R(62), 0xBEF9A3F7 );
++    P( B, C, D, E, F, G, H, A, R(63), 0xC67178F2 );
++
++    ctx->state[0] += A;
++    ctx->state[1] += B;
++    ctx->state[2] += C;
++    ctx->state[3] += D;
++    ctx->state[4] += E;
++    ctx->state[5] += F;
++    ctx->state[6] += G;
++    ctx->state[7] += H;
++}
++
++void sha256_update( sha256_context *ctx, uint8 *input, uint32 length )
++{
++    uint32 left, fill;
++
++    if( ! length ) return;
++
++    left = ctx->total[0] & 0x3F;
++    fill = 64 - left;
++
++    ctx->total[0] += length;
++    ctx->total[0] &= 0xFFFFFFFF;
++
++    if( ctx->total[0] < length )
++        ctx->total[1]++;
++
++    if( left && length >= fill )
++    {
++        memcpy( (void *) (ctx->buffer + left),
++                (void *) input, fill );
++        sha256_process( ctx, ctx->buffer );
++        length -= fill;
++        input  += fill;
++        left = 0;
++    }
++
++    while( length >= 64 )
++    {
++        sha256_process( ctx, input );
++        length -= 64;
++        input  += 64;
++    }
++
++    if( length )
++    {
++        memcpy( (void *) (ctx->buffer + left),
++                (void *) input, length );
++    }
++}
++
++static uint8 sha256_padding[64] =
++{
++ 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
++    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
++    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
++    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
++};
++
++void sha256_finish( sha256_context *ctx, uint8 digest[32] )
++{
++    uint32 last, padn;
++    uint32 high, low;
++    uint8 msglen[8];
++
++    high = ( ctx->total[0] >> 29 )
++         | ( ctx->total[1] <<  3 );
++    low  = ( ctx->total[0] <<  3 );
++
++    PUT_UINT32( high, msglen, 0 );
++    PUT_UINT32( low,  msglen, 4 );
++
++    last = ctx->total[0] & 0x3F;
++    padn = ( last < 56 ) ? ( 56 - last ) : ( 120 - last );
++
++    sha256_update( ctx, sha256_padding, padn );
++    sha256_update( ctx, msglen, 8 );
++
++    PUT_UINT32( ctx->state[0], digest,  0 );
++    PUT_UINT32( ctx->state[1], digest,  4 );
++    PUT_UINT32( ctx->state[2], digest,  8 );
++    PUT_UINT32( ctx->state[3], digest, 12 );
++    PUT_UINT32( ctx->state[4], digest, 16 );
++    PUT_UINT32( ctx->state[5], digest, 20 );
++    PUT_UINT32( ctx->state[6], digest, 24 );
++    PUT_UINT32( ctx->state[7], digest, 28 );
++}
++
++#ifdef TEST
++
++#include <stdlib.h>
++#include <stdio.h>
++
++/*
++ * those are the standard FIPS-180-2 test vectors
++ */
++
++static char *msg[] = 
++{
++    "abc",
++    "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
++    NULL
++};
++
++static char *val[] =
++{
++    "ba7816bf8f01cfea414140de5dae2223" \
++    "b00361a396177a9cb410ff61f20015ad",
++    "248d6a61d20638b8e5c026930c3e6039" \
++    "a33ce45964ff2167f6ecedd419db06c1",
++    "cdc76e5c9914fb9281a1c7e284d73e67" \
++    "f1809a48a497200e046d39ccc7112cd0"
++};
++
++int main( int argc, char *argv[] )
++{
++    FILE *f;
++    int i, j;
++    char output[65];
++    sha256_context ctx;
++    unsigned char buf[1000];
++    unsigned char sha256sum[32];
++
++    if( argc < 2 )
++    {
++        printf( "\n SHA-256 Validation Tests:\n\n" );
++
++        for( i = 0; i < 3; i++ )
++        {
++            printf( " Test %d ", i + 1 );
++
++            sha256_starts( &ctx );
++
++            if( i < 2 )
++            {
++                sha256_update( &ctx, (uint8 *) msg[i],
++                               strlen( msg[i] ) );
++            }
++            else
++            {
++                memset( buf, 'a', 1000 );
++
++                for( j = 0; j < 1000; j++ )
++                {
++                    sha256_update( &ctx, (uint8 *) buf, 1000 );
++                }
++            }
++
++            sha256_finish( &ctx, sha256sum );
++
++            for( j = 0; j < 32; j++ )
++            {
++                sprintf( output + j * 2, "%02x", sha256sum[j] );
++            }
++
++            if( memcmp( output, val[i], 64 ) )
++            {
++                printf( "failed!\n" );
++                return( 1 );
++            }
++
++            printf( "passed.\n" );
++        }
++
++        printf( "\n" );
++    }
++    else
++    {
++        if( ! ( f = fopen( argv[1], "rb" ) ) )
++        {
++            perror( "fopen" );
++            return( 1 );
++        }
++
++        sha256_starts( &ctx );
++
++        while( ( i = fread( buf, 1, sizeof( buf ), f ) ) > 0 )
++        {
++            sha256_update( &ctx, buf, i );
++        }
++
++        sha256_finish( &ctx, sha256sum );
++
++        for( j = 0; j < 32; j++ )
++        {
++            printf( "%02x", sha256sum[j] );
++        }
++
++        printf( "  %s\n", argv[1] );
++    }
++
++    return( 0 );
++}
++
++#endif
+diff -upwbNr quagga-0.99.21/lib/sha256.h quaggaRFC6506/lib/sha256.h
+--- quagga-0.99.21/lib/sha256.h	1970-01-01 05:30:00.000000000 +0530
++++ quaggaRFC6506/lib/sha256.h	2013-01-16 04:56:22.000000000 +0530
+@@ -0,0 +1,25 @@
++#ifndef _SHA256_H
++#define _SHA256_H
++
++#ifndef uint8
++#define uint8  unsigned char
++#endif
++
++#ifndef uint32
++#define uint32 unsigned long int
++#endif
++
++typedef struct
++{
++    uint32 total[2];
++    uint32 state[8];
++    uint8 buffer[64];
++}
++sha256_context;
++
++void sha256_starts( sha256_context *ctx );
++void sha256_update( sha256_context *ctx, uint8 *input, uint32 length );
++void sha256_finish( sha256_context *ctx, uint8 digest[32] );
++
++#endif /* sha256.h */
++
+diff -upwbNr quagga-0.99.21/ospf6d/ospf6_area.c quaggaRFC6506/ospf6d/ospf6_area.c
+--- quagga-0.99.21/ospf6d/ospf6_area.c	2012-03-24 01:13:20.000000000 +0530
++++ quaggaRFC6506/ospf6d/ospf6_area.c	2013-04-08 13:35:14.000000000 +0530
+@@ -432,6 +432,11 @@ ospf6_area_config_write (struct vty *vty
+       if (EXPORT_NAME (oa))
+         vty_out (vty, " area %s export-list %s%s",
+                  oa->name, EXPORT_NAME (oa), VNL);
++      
++    
++      if (OSPF6_OPT_ISSET_AT (oa->options, OSPF6_OPT_AT))
++              vty_out (vty, " area %s sha-256-authentication %s",oa->name , VNL);
++
+     }
+ }
+ 
+@@ -624,6 +629,45 @@ DEFUN (no_area_export_list,
+   return CMD_SUCCESS;
+ }
+ 
++DEFUN (area_sha256_authentication,
++       area_sha256_authentication_cmd,
++       "area A.B.C.D sha-256-authentication",
++       "OSPFv6 area parameters\n"
++       "OSPF6 area ID in IPv4 address notation\n"
++       "Enable sha-256 authentication on this area\n"
++       )
++{
++
++  struct ospf6_area *area;
++  
++  OSPF6_CMD_AREA_GET (argv[0], area);
++  
++  OSPF6_OPT_SET_AT (area->options, OSPF6_OPT_AT);
++
++  return CMD_SUCCESS;
++}
++
++DEFUN (no_area_sha256_authentication,
++       no_area_sha256_authentication_cmd,
++       "no area A.B.C.D sha-256-authentication",
++       NO_STR
++       "OSPFv6 area parameters\n"
++       "OSPF6 area ID in IPv4 address notation\n"
++       "Disable sha-256 authentication on this area\n"
++       )
++{
++
++  struct ospf6_area *area;
++  
++  OSPF6_CMD_AREA_GET (argv[0], area);
++  
++  OSPF6_OPT_CLEAR_AT (area->options, OSPF6_OPT_AT);
++
++  return CMD_SUCCESS;
++}
++
++
++
+ DEFUN (show_ipv6_ospf6_spf_tree,
+        show_ipv6_ospf6_spf_tree_cmd,
+        "show ipv6 ospf6 spf tree",
+@@ -782,6 +826,10 @@ ospf6_area_init (void)
+   install_element (OSPF6_NODE, &area_filter_list_cmd);
+   install_element (OSPF6_NODE, &no_area_filter_list_cmd);
+ 
++  install_element (OSPF6_NODE, &area_sha256_authentication_cmd);
++  install_element (OSPF6_NODE, &no_area_sha256_authentication_cmd);
++
++
+ }
+ 
+ 
+diff -upwbNr quagga-0.99.21/ospf6d/ospf6_interface.c quaggaRFC6506/ospf6d/ospf6_interface.c
+--- quagga-0.99.21/ospf6d/ospf6_interface.c	2012-03-24 01:13:20.000000000 +0530
++++ quaggaRFC6506/ospf6d/ospf6_interface.c	2013-04-08 13:35:36.000000000 +0530
+@@ -41,6 +41,8 @@
+ #include "ospf6_intra.h"
+ #include "ospf6_spf.h"
+ #include "ospf6d.h"
++#include "ospf6_proto.h"
++
+ 
+ unsigned char conf_debug_ospf6_interface = 0;
+ 
+@@ -141,6 +143,12 @@ ospf6_interface_create (struct interface
+   oi->route_connected = OSPF6_ROUTE_TABLE_CREATE (INTERFACE, CONNECTED_ROUTES);
+   oi->route_connected->scope = oi;
+ 
++  oi->auth_crypt= list_new();  
++
++  oi->low_order_seqnum = time (NULL);
++  oi->high_order_seqnum = 0;
++  oi->auth_type = 0;
++  
+   /* link both */
+   oi->interface = ifp;
+   ifp->info = oi;
+@@ -840,6 +848,50 @@ ospf6_interface_show (struct vty *vty, s
+   return 0;
+ }
+ 
++struct ospf6_crypt_key *
++ospf6_crypt_key_new ()
++{
++  return XCALLOC (MTYPE_OSPF6_CRYPT_KEY, sizeof (struct ospf6_crypt_key));
++}
++
++void
++ospf6_crypt_key_add (struct list *crypt, struct ospf6_crypt_key *ck)
++{
++  listnode_add (crypt, ck);
++}
++
++struct ospf6_crypt_key *
++ospf6_crypt_key_lookup (struct list *auth_crypt, u_char key_id)
++{
++  struct listnode *node;
++  struct ospf6_crypt_key *ck;
++
++  for (ALL_LIST_ELEMENTS_RO (auth_crypt, node, ck))
++    if (ck->key_id == key_id)
++      return ck;
++
++  return NULL;
++}
++
++int
++ospf6_crypt_key_delete (struct list *auth_crypt, u_char key_id)
++{
++  struct listnode *node, *nnode;
++  struct ospf6_crypt_key *ck;
++
++  for (ALL_LIST_ELEMENTS (auth_crypt, node, nnode, ck))
++    {
++      if (ck->key_id == key_id)
++        {
++          listnode_delete (auth_crypt, ck);
++          XFREE (MTYPE_OSPF6_CRYPT_KEY, ck);
++          return 1;
++        }
++    }
++
++  return 0;
++}
++
+ /* show interface */
+ DEFUN (show_ipv6_ospf6_interface,
+        show_ipv6_ospf6_interface_ifname_cmd,
+@@ -1504,10 +1556,137 @@ DEFUN (no_ipv6_ospf6_advertise_prefix_li
+   return CMD_SUCCESS;
+ }
+ 
++
++DEFUN (ipv6_ospf6_sha256_key,       
++       ipv6_ospf6_sha256_key_cmd,
++       "ipv6 ospf6 sha-256-key <1-255> sha-256 KEY",
++       "IPv6 Information\n"
++       "OSPF6 interface commands\n"
++       "SHA-256 authentication key-ID\n"
++       "Key ID\n"
++       "Enable SHA-256 algorithm\n"
++       "The authentication password (key)"
++       )
++{
++  struct ospf6_interface *oi;
++  struct interface *ifp;
++  struct ospf6_crypt_key *ck;
++  u_char key_id;
++
++  ifp = (struct interface *)vty->index;
++  assert (ifp);
++
++  oi = (struct ospf6_interface *)ifp->info;
++  if (oi == NULL)
++    oi = ospf6_interface_create (ifp);
++  assert (oi);
++ 
++  key_id = strtol (argv[0], NULL, 10);
++  if (ospf6_crypt_key_lookup (oi->auth_crypt, key_id)!= NULL)
++    {
++      vty_out (vty, "OSPF6: Key %d already exists%s", key_id, VTY_NEWLINE);
++      return CMD_WARNING;
++    }
++
++  ck = ospf6_crypt_key_new ();
++  ck->key_id = (u_char) key_id;
++  memset (ck->auth_key, 0, OSPF6_AUTH_DATA_SIZE +1);
++  strncpy ((char *) ck->auth_key, argv[1], OSPF6_AUTH_DATA_SIZE);
++
++  ospf6_crypt_key_add (oi->auth_crypt, ck);
++  
++  return CMD_SUCCESS;
++}
++
++DEFUN (no_ipv6_ospf6_sha256_key,       
++       no_ipv6_ospf6_sha256_key_cmd,
++       "no ipv6 ospf6 sha-256-key <1-255>",
++       NO_STR
++       "IPv6 Information\n"
++       "OSPF6 interface commands\n"
++       "Disable SHA-256 authentication password (key)\n"
++       "Key ID\n"
++       )
++
++{
++  struct ospf6_interface *oi;
++  struct interface *ifp;
++  u_char key_id;
++
++  ifp = (struct interface *) vty->index;
++  assert (ifp);
++
++  oi = (struct ospf6_interface *) ifp->info;
++  if (oi == NULL)
++  oi = ospf6_interface_create (ifp);
++  assert (oi);
++
++  key_id = strtol (argv[0], NULL, 10);
++  if (ospf6_crypt_key_lookup (oi->auth_crypt, key_id)== NULL)
++    {
++      vty_out (vty, "OSPF6: Key %d not exists%s", key_id, VTY_NEWLINE);
++      return CMD_WARNING;
++    }
++
++ospf6_crypt_key_delete (oi->auth_crypt, key_id);
++
++  return CMD_SUCCESS;
++}
++
++
++DEFUN (ipv6_ospf6_sha_256_authentication,       
++       ipv6_ospf6_sha_256_authentication_cmd,
++       "ipv6 ospf6 sha-256-authentication",
++       "IPv6 Information\n"
++       "OSPF6 interface commands\n"
++       "Enable SHA-256 algorithm for authentication\n"
++       )
++{
++  struct ospf6_interface *oi;
++  struct interface *ifp;
++
++  ifp = (struct interface *)vty->index;
++  assert (ifp);
++
++  oi = (struct ospf6_interface *)ifp->info;
++  if (oi == NULL)
++    oi = ospf6_interface_create (ifp);
++  assert (oi);
++ 
++  oi->auth_type = 1;
++  return CMD_SUCCESS;
++}
++
++DEFUN (no_ipv6_ospf6_sha_256_authentication,       
++       no_ipv6_ospf6_sha_256_authentication_cmd,
++       "no ipv6 ospf6 sha-256-authentication",
++       NO_STR
++       "IPv6 Information\n"
++       "OSPF6 interface commands\n"
++       "Disable SHA-256 algorithm for authentication\n"
++       )
++
++{
++  struct ospf6_interface *oi;
++  struct interface *ifp;
++
++  ifp = (struct interface *) vty->index;
++  assert (ifp);
++
++  oi = (struct ospf6_interface *) ifp->info;
++  if (oi == NULL)
++  oi = ospf6_interface_create (ifp);
++  assert (oi);
++
++  oi->auth_type = 0 ;
++  return CMD_SUCCESS;
++}
++
+ static int
+ config_write_ospf6_interface (struct vty *vty)
+ {
+-  struct listnode *i;
++  struct listnode *i,*n1;
++  struct ospf6_crypt_key *ck;
+   struct ospf6_interface *oi;
+   struct interface *ifp;
+ 
+@@ -1563,11 +1742,23 @@ config_write_ospf6_interface (struct vty
+       if (oi->mtu_ignore)
+         vty_out (vty, " ipv6 ospf6 mtu-ignore%s", VNL);
+ 
++
++   for (ALL_LIST_ELEMENTS_RO (oi->auth_crypt, n1, ck))
++   {
++   vty_out (vty, " ipv6 ospf6 sha-256-key %d sha-256 %s%s",
++		     ck->key_id, ck->auth_key, VNL);
++    }
++
++   if (oi->auth_type)
++        vty_out (vty, " ipv6 ospf6 sha-256-authentication %s",VNL);
++   
++
+       vty_out (vty, "!%s", VNL);
+     }
+   return 0;
+ }
+ 
++
+ static struct cmd_node interface_node =
+ {
+   INTERFACE_NODE,
+@@ -1620,6 +1811,12 @@ ospf6_interface_init (void)
+ 
+   install_element (INTERFACE_NODE, &ipv6_ospf6_advertise_prefix_list_cmd);
+   install_element (INTERFACE_NODE, &no_ipv6_ospf6_advertise_prefix_list_cmd);
++
++  install_element (INTERFACE_NODE, &ipv6_ospf6_sha256_key_cmd); 
++  install_element (INTERFACE_NODE, &no_ipv6_ospf6_sha256_key_cmd);
++
++  install_element (INTERFACE_NODE, &ipv6_ospf6_sha_256_authentication_cmd); 
++  install_element (INTERFACE_NODE, &no_ipv6_ospf6_sha_256_authentication_cmd); 
+ }
+ 
+ DEFUN (debug_ospf6_interface,
+diff -upwbNr quagga-0.99.21/ospf6d/ospf6_interface.h quaggaRFC6506/ospf6d/ospf6_interface.h
+--- quagga-0.99.21/ospf6d/ospf6_interface.h	2012-03-24 01:13:20.000000000 +0530
++++ quaggaRFC6506/ospf6d/ospf6_interface.h	2013-04-08 13:35:34.000000000 +0530
+@@ -23,6 +23,7 @@
+ #define OSPF6_INTERFACE_H
+ 
+ #include "if.h"
++#include "ospf6_message.h" 
+ 
+ /* Debug option */
+ extern unsigned char conf_debug_ospf6_interface;
+@@ -33,6 +34,13 @@ extern unsigned char conf_debug_ospf6_in
+ #define IS_OSPF6_DEBUG_INTERFACE \
+   (conf_debug_ospf6_interface)
+ 
++struct ospf6_crypt_key
++{
++  u_char key_id;
++  u_char auth_key[OSPF6_AUTH_DATA_SIZE + 1];
++};
++
++
+ /* Interface structure */
+ struct ospf6_interface
+ {
+@@ -105,6 +113,15 @@ struct ospf6_interface
+ 
+   /* prefix-list name to filter connected prefix */
+   char *plist_name;
++
++  struct list * auth_crypt ;        /* list of crypt data */
++
++  u_int8_t auth_type ;                  /* auth type for interface */ 
++  u_int32_t high_order_seqnum;		/* higher order Cryptographic Sequence Number */
++
++  u_int32_t low_order_seqnum;		/* lower order Cryptographic Sequence Number */
++
++
+ };
+ 
+ /* interface state */
+@@ -155,6 +172,12 @@ extern int wait_timer (struct thread *);
+ extern int backup_seen (struct thread *);
+ extern int neighbor_change (struct thread *);
+ 
++extern struct ospf6_crypt_key *ospf6_crypt_key_lookup (struct list *, u_char);
++extern struct ospf6_crypt_key *ospf6_crypt_key_new (void);
++extern void ospf6_crypt_key_add (struct list *, struct ospf6_crypt_key *);
++extern int ospf6_crypt_key_delete (struct list *, u_char);
++
++
+ extern void ospf6_interface_init (void);
+ 
+ extern int config_write_ospf6_debug_interface (struct vty *vty);
+diff -upwbNr quagga-0.99.21/ospf6d/ospf6_message.c quaggaRFC6506/ospf6d/ospf6_message.c
+--- quagga-0.99.21/ospf6d/ospf6_message.c	2012-04-17 19:26:26.000000000 +0530
++++ quaggaRFC6506/ospf6d/ospf6_message.c	2013-04-08 13:35:34.000000000 +0530
+@@ -47,8 +47,20 @@
+ #include "ospf6_flood.h"
+ #include "ospf6d.h"
+ 
++#include "sha256.h"   
+ #include <netinet/ip6.h>
+ 
++/*Initialization of Apad last 4 octets*/
++
++static const uint32_t Apad_Last4Octets[4] = {
++0x878FE1F3,0x878FE1F3,0x878FE1F3,0x878FE1F3
++};
++
++/*Initialization of CPID(Cryptographic Protocol ID)*/
++static const uint16_t CPID =1;
++
++
++
+ unsigned char conf_debug_ospf6_message[6] = {0x03, 0, 0, 0, 0, 0};
+ static const struct message ospf6_message_type_str [] =
+ {
+@@ -58,6 +70,20 @@ static const struct message ospf6_messag
+   { OSPF6_MESSAGE_TYPE_LSUPDATE, "LSUpdate" },
+   { OSPF6_MESSAGE_TYPE_LSACK,    "LSAck"    },
+ };
++
++/* AuType */
++static
++const struct message ospf6_auth_type_string[] =
++{
++  { OSPF6_AUTH_NULL,          "Null"          },
++  { OSPF6_AUTH_CRYPTOGRAPHIC, "Cryptographic" },
++};
++
++static const size_t ospf6_auth_type_string_max =
++  sizeof (ospf6_auth_type_string) / sizeof (ospf6_auth_type_string[0]);
++
++
++
+ static const size_t ospf6_message_type_str_max =
+   sizeof (ospf6_message_type_str) / sizeof (ospf6_message_type_str[0]);
+ 
+@@ -89,6 +115,9 @@ const u_int16_t ospf6_lsa_minlen[OSPF6_L
+   /* 0x2009 */ OSPF6_INTRA_PREFIX_LSA_MIN_SIZE
+ };
+ 
++
++
++
+ /* print functions */
+ 
+ static void
+@@ -105,10 +134,11 @@ ospf6_header_print (struct ospf6_header
+ }
+ 
+ void
+-ospf6_hello_print (struct ospf6_header *oh)
++ospf6_hello_print (struct ospf6_header *oh, struct ospfv3_crypt *ospf6_at)
+ {
+   struct ospf6_hello *hello;
+-  char options[16];
++  char options[36];     
++
+   char drouter[16], bdrouter[16], neighbor[16];
+   char *p;
+ 
+@@ -122,6 +152,25 @@ ospf6_hello_print (struct ospf6_header *
+   inet_ntop (AF_INET, &hello->bdrouter, bdrouter, sizeof (bdrouter));
+   ospf6_options_printbuf (hello->options, options, sizeof (options));
+ 
++  switch (ospf6_at->auth_type)
++    {
++    case OSPF6_AUTH_NULL:
++      zlog_debug ("    Autype : Null Authentication");
++      break;
++    case OSPF6_AUTH_CRYPTOGRAPHIC:
++      zlog_debug ("    Autype : SHA-256 Cryptographic Authentication");
++      zlog_debug ("    Key ID : %d", ospf6_at->sa_id);
++      zlog_debug ("    Auth Data Len :  %d", ospf6_at->auth_data_length);
++      zlog_debug ("    Higher Sequence number : %ld",
++		 (u_long)ntohl (ospf6_at->high_order_seqnum));
++      zlog_debug ("    Lower Sequence number : %ld",
++		 (u_long)ntohl (ospf6_at->low_order_seqnum));
++      break;
++    default:
++      zlog_debug ("*   This is not supported authentication type");
++      break;
++    }
++  
+   zlog_debug ("    I/F-Id:%ld Priority:%d Option:%s",
+              (u_long) ntohl (hello->interface_id), hello->priority, options);
+   zlog_debug ("    HelloInterval:%hu DeadInterval:%hu",
+@@ -140,10 +189,10 @@ ospf6_hello_print (struct ospf6_header *
+ }
+ 
+ void
+-ospf6_dbdesc_print (struct ospf6_header *oh)
++ospf6_dbdesc_print (struct ospf6_header *oh, struct ospfv3_crypt *ospf6_at)
+ {
+   struct ospf6_dbdesc *dbdesc;
+-  char options[16];
++  char options[36]; 
+   char *p;
+ 
+   ospf6_header_print (oh);
+@@ -154,6 +203,26 @@ ospf6_dbdesc_print (struct ospf6_header
+ 
+   ospf6_options_printbuf (dbdesc->options, options, sizeof (options));
+ 
++    switch (ospf6_at->auth_type)
++    {
++    case OSPF6_AUTH_NULL:
++      zlog_debug ("    Autype : Null Authentication");
++      break;
++    case OSPF6_AUTH_CRYPTOGRAPHIC:
++      zlog_debug ("    Autype : SHA-256 Cryptographic Authentication");
++      zlog_debug ("    Key ID : %d", ospf6_at->sa_id);
++      zlog_debug ("    Auth Data Len :  %d", ospf6_at->auth_data_length);
++      zlog_debug ("    Higher Sequence number : %ld",
++		 (u_long)ntohl (ospf6_at->high_order_seqnum));
++      zlog_debug ("    Lower Sequence number : %ld",
++		 (u_long)ntohl (ospf6_at->low_order_seqnum));
++      break;
++    default:
++      zlog_debug ("*   This is not supported authentication type");
++      break;
++    }
++   
++
+   zlog_debug ("    MBZ: %#x Option: %s IfMTU: %hu",
+              dbdesc->reserved1, options, ntohs (dbdesc->ifmtu));
+   zlog_debug ("    MBZ: %#x Bits: %s%s%s SeqNum: %#lx",
+@@ -247,10 +316,13 @@ ospf6_hello_recv (struct in6_addr *src,
+   int twoway = 0;
+   int neighborchange = 0;
+   int backupseen = 0;
++  struct ospfv3_crypt *ospf6_at ;   
+ 
+   hello = (struct ospf6_hello *)
+     ((caddr_t) oh + sizeof (struct ospf6_header));
+ 
++  ospf6_at = (struct ospfv3_crypt *)((caddr_t) oh + ntohs (oh->length)); 
++
+   /* HelloInterval check */
+   if (ntohs (hello->hello_interval) != oi->hello_interval)
+     {
+@@ -280,7 +352,7 @@ ospf6_hello_recv (struct in6_addr *src,
+   on = ospf6_neighbor_lookup (oh->router_id, oi);
+   if (on == NULL)
+     {
+-      on = ospf6_neighbor_create (oh->router_id, oi);
++      on = ospf6_neighbor_create (oh->router_id, oi , ospf6_at);  /* ospf6_at added in order to update sequence no.*/
+       on->prev_drouter = on->drouter = hello->drouter;
+       on->prev_bdrouter = on->bdrouter = hello->bdrouter;
+       on->priority = hello->priority;
+@@ -1163,12 +1235,64 @@ ospf6_lsaseq_examin
+   return MSG_OK;
+ }
+ 
++
++
++
++/* OSPF6 authentication type & AT Bit checking function */
++static int
++ospf6_auth_type (struct ospf6_interface *oi)
++{
++    int auth_type = OSPF6_AUTH_NULL;
++  /*struct ospf6_hello *hello;
++  
++  hello = (struct ospf6_hello *)
++    ((caddr_t) oh + sizeof (struct ospf6_header));
++
++  if (OSPF6_OPT_ISSET_AT (hello->options, OSPF6_OPT_AT) !=
++      OSPF6_OPT_ISSET_AT (oi->area->options, OSPF6_OPT_AT))
++    {
++      return OSPF6_AUTH_MISMATCH;
++    }
++  else if (OSPF6_OPT_ISSET_AT (hello->options, OSPF6_OPT_AT)) 
++  return OSPF6_AUTH_CRYPTOGRAPHIC ;
++
++  else
++  return OSPF6_AUTH_NULL ;  */
++
++   if(OSPF6_OPT_ISSET_AT (oi->area->options, OSPF6_OPT_AT) || oi->auth_type)   
++      auth_type =  OSPF6_AUTH_CRYPTOGRAPHIC;
++   
++   /* Handle case where MD5 key list is not configured aka Cisco */
++  if (auth_type == OSPF6_AUTH_CRYPTOGRAPHIC &&
++      (list_isempty (oi->auth_crypt)))
++    return OSPF6_AUTH_NULL;
++  
++  return auth_type;
++   
++}
++
++ 
++
+ /* Verify a complete OSPF packet for proper sizing/alignment. */
+ static unsigned
+-ospf6_packet_examin (struct ospf6_header *oh, const unsigned bytesonwire)
++ospf6_packet_examin (struct ospf6_interface *oi, struct ospf6_header *oh, const unsigned bytesonwire)   
+ {
+   struct ospf6_lsupdate *lsupd;
+   unsigned test;
++  struct ospfv3_crypt *ospf6_at ;         
++  int auth_type = OSPF6_AUTH_NULL ;       
++  u_int16_t bytesdeclared, bytesauth;     
++  struct ospf6_hello *hello;
++  struct ospf6_dbdesc *dbdesc;
++  
++  hello = (struct ospf6_hello *)
++    ((caddr_t) oh + sizeof (struct ospf6_header));       
++
++  dbdesc = (struct ospf6_dbdesc *)
++    ((caddr_t) oh + sizeof (struct ospf6_header));       
++
++ ospf6_at = (struct ospfv3_crypt *)((caddr_t) oh + ntohs (oh->length));  
++
+ 
+   /* length, 1st approximation */
+   if (bytesonwire < OSPF6_HEADER_SIZE)
+@@ -1178,13 +1302,36 @@ ospf6_packet_examin (struct ospf6_header
+     return MSG_NG;
+   }
+   /* Now it is safe to access header fields. */
+-  if (bytesonwire != ntohs (oh->length))
++
++ bytesdeclared =  ntohs (oh->length);
++
++  /* Check for Authentication Trailer in the received hello packet or Database Description Packets */
++
++ if(OSPF6_OPT_ISSET_AT (hello->options,OSPF6_OPT_AT) || OSPF6_OPT_ISSET_AT (dbdesc->options ,OSPF6_OPT_AT))  
++      auth_type =  OSPF6_AUTH_CRYPTOGRAPHIC;
++  
++  if(auth_type == OSPF6_AUTH_NULL || ospf6_at->auth_type == OSPF6_AUTH_NULL)  /* case when AT Bit is set at sender but key is not specified, auth_type is considered to be NULL */
++    bytesauth = 0;
++  else
++  {
++    if (ospf6_at->auth_data_length != AUTH_TRAILER_HEADER + OSPF6_AUTH_DATA_SIZE + OSPF6_AUTH_DATA_SIZE)
++    {
++      if (IS_OSPF6_DEBUG_MESSAGE(0,RECV))
++        zlog_debug ("%s: unsupported crypto auth length (%u B)",
++                    __func__, ospf6_at->auth_data_length);
++      return MSG_NG;
++    }
++    bytesauth = AUTH_TRAILER_HEADER + OSPF6_AUTH_DATA_SIZE + OSPF6_AUTH_DATA_SIZE;
++  }
++
++  if (bytesdeclared + bytesauth > bytesonwire)
+   {
+     if (IS_OSPF6_DEBUG_MESSAGE (OSPF6_MESSAGE_TYPE_UNKNOWN, RECV))
+-      zlog_debug ("%s: packet length error (%u real, %u declared)",
+-                  __func__, bytesonwire, ntohs (oh->length));
++            zlog_debug ("%s: packet length error (%u real, %u+%u declared)",
++                  __func__, bytesonwire, bytesdeclared, bytesauth);
+     return MSG_NG;
+   }
++
+   /* version check */
+   if (oh->version != OSPFV3_VERSION)
+   {
+@@ -1193,16 +1340,18 @@ ospf6_packet_examin (struct ospf6_header
+     return MSG_NG;
+   }
+   /* length, 2nd approximation */
++  /* Length, 2nd approximation. The type-specific constraint is checked
++     against declared length, not amount of bytes on wire. As done in ospfv2 */
+   if
+   (
+     oh->type < OSPF6_MESSAGE_TYPE_ALL &&
+     ospf6_packet_minlen[oh->type] &&
+-    bytesonwire < OSPF6_HEADER_SIZE + ospf6_packet_minlen[oh->type]
++    bytesdeclared < OSPF6_HEADER_SIZE + ospf6_packet_minlen[oh->type]
+   )
+   {
+     if (IS_OSPF6_DEBUG_MESSAGE (OSPF6_MESSAGE_TYPE_UNKNOWN, RECV))
+       zlog_debug ("%s: undersized (%u B) %s packet", __func__,
+-                  bytesonwire, LOOKUP (ospf6_message_type_str, oh->type));
++                  bytesdeclared, LOOKUP (ospf6_message_type_str, oh->type));
+     return MSG_NG;
+   }
+   /* type-specific deeper validation */
+@@ -1211,26 +1360,28 @@ ospf6_packet_examin (struct ospf6_header
+   case OSPF6_MESSAGE_TYPE_HELLO:
+     /* RFC5340 A.3.2, packet header + OSPF6_HELLO_MIN_SIZE bytes followed
+        by N>=0 router-IDs. */
+-    if (0 == (bytesonwire - OSPF6_HEADER_SIZE - OSPF6_HELLO_MIN_SIZE) % 4)
++      if (0 == (bytesdeclared - OSPF6_HEADER_SIZE - OSPF6_HELLO_MIN_SIZE ) % 4)
+       return MSG_OK;
++
+     if (IS_OSPF6_DEBUG_MESSAGE (OSPF6_MESSAGE_TYPE_UNKNOWN, RECV))
+       zlog_debug ("%s: alignment error in %s packet",
+                   __func__, LOOKUP (ospf6_message_type_str, oh->type));
+     return MSG_NG;
++
+   case OSPF6_MESSAGE_TYPE_DBDESC:
+     /* RFC5340 A.3.3, packet header + OSPF6_DB_DESC_MIN_SIZE bytes followed
+        by N>=0 header-only LSAs. */
+     test = ospf6_lsaseq_examin
+     (
+       (struct ospf6_lsa_header *) ((caddr_t) oh + OSPF6_HEADER_SIZE + OSPF6_DB_DESC_MIN_SIZE),
+-      bytesonwire - OSPF6_HEADER_SIZE - OSPF6_DB_DESC_MIN_SIZE,
++      bytesdeclared - OSPF6_HEADER_SIZE - OSPF6_DB_DESC_MIN_SIZE,
+       1,
+       0
+     );
+     break;
+   case OSPF6_MESSAGE_TYPE_LSREQ:
+     /* RFC5340 A.3.4, packet header + N>=0 LS description blocks. */
+-    if (0 == (bytesonwire - OSPF6_HEADER_SIZE - OSPF6_LS_REQ_MIN_SIZE) % OSPF6_LSREQ_LSDESC_FIX_SIZE)
++    if (0 == (bytesdeclared - OSPF6_HEADER_SIZE - OSPF6_LS_REQ_MIN_SIZE) % OSPF6_LSREQ_LSDESC_FIX_SIZE)
+       return MSG_OK;
+     if (IS_OSPF6_DEBUG_MESSAGE (OSPF6_MESSAGE_TYPE_UNKNOWN, RECV))
+       zlog_debug ("%s: alignment error in %s packet",
+@@ -1243,7 +1394,7 @@ ospf6_packet_examin (struct ospf6_header
+     test = ospf6_lsaseq_examin
+     (
+       (struct ospf6_lsa_header *) ((caddr_t) lsupd + OSPF6_LS_UPD_MIN_SIZE),
+-      bytesonwire - OSPF6_HEADER_SIZE - OSPF6_LS_UPD_MIN_SIZE,
++      bytesdeclared - OSPF6_HEADER_SIZE - OSPF6_LS_UPD_MIN_SIZE,
+       0,
+       ntohl (lsupd->lsa_number) /* 32 bits */
+     );
+@@ -1253,7 +1404,7 @@ ospf6_packet_examin (struct ospf6_header
+     test = ospf6_lsaseq_examin
+     (
+       (struct ospf6_lsa_header *) ((caddr_t) oh + OSPF6_HEADER_SIZE + OSPF6_LS_ACK_MIN_SIZE),
+-      bytesonwire - OSPF6_HEADER_SIZE - OSPF6_LS_ACK_MIN_SIZE,
++      bytesdeclared - OSPF6_HEADER_SIZE - OSPF6_LS_ACK_MIN_SIZE,
+       1,
+       0
+     );
+@@ -1275,7 +1426,7 @@ ospf6_rxpacket_examin (struct ospf6_inte
+ {
+   char buf[2][INET_ADDRSTRLEN];
+ 
+-  if (MSG_OK != ospf6_packet_examin (oh, bytesonwire))
++  if (MSG_OK != ospf6_packet_examin (oi, oh, bytesonwire))  
+     return MSG_NG;
+ 
+   /* Area-ID check */
+@@ -1313,6 +1464,232 @@ ospf6_rxpacket_examin (struct ospf6_inte
+   return MSG_OK;
+ }
+ 
++
++
++static int
++ospf6_check_sha256_digest(struct ospf6_interface *oi, struct ospf6_header *oh, struct ospfv3_crypt *ospf6_at,struct in6_addr *src)
++{
++  const u_int8_t *auth_key;
++  struct ospf6_crypt_key *ck;
++  int i;
++  sha256_context context;
++  sha256_context tctx;
++  uint8_t Apad[LENGTH_OF_HASH];
++  uint8_t ks[35];
++  uint8_t ko[LENGTH_OF_HASH]; 
++  unsigned char k_ipad[BLOCK_SIZE];    /* inner padding - key XORd with ipad */
++  unsigned char k_opad[BLOCK_SIZE];    /* outer padding - key XORd with opad */
++  uint8_t key_len; 
++  unsigned char tk[LENGTH_OF_HASH];
++
++  unsigned char first_hash[OSPF6_AUTH_DATA_SIZE];
++
++  unsigned char digest[OSPF6_AUTH_DATA_SIZE];
++  uint8_t auth_key_len;
++  u_char calculated_auth_data[OSPF6_AUTH_DATA_SIZE + OSPF6_AUTH_DATA_SIZE];
++
++  struct ospf6_neighbor *on;
++  oh->checksum=0;  // To Delete 
++  
++/* Get sha-256 Authentication key from auth_crypt list. */
++
++  ck = ospf6_crypt_key_lookup (oi->auth_crypt, ospf6_at->sa_id);
++  if (ck == NULL)
++    {
++      zlog_warn ("interface %s: ospf6_check_sha256 no key %d",
++		 oi->interface->name, ospf6_at->sa_id);
++      return 0;
++    }
++
++  auth_key = ck->auth_key;
++   
++  auth_key_len = strlen(ck->auth_key);
++
++  
++  /*Method to (create Apad) retrieve IP address and append Apad_Last4Octets to it*/
++	memset(Apad,0, sizeof(Apad));
++	memcpy(Apad,src, sizeof (struct in6_addr));	//append the ipv6 addresss in the variable Apad
++	memcpy(Apad + sizeof (struct in6_addr), Apad_Last4Octets, sizeof (Apad_Last4Octets));
++
++    /*Method to (create ks) Function for appending CPID to Authentication key K to form Ks*/
++	memset(ks, 0, 34);
++    memcpy(ks,auth_key,auth_key_len);
++	memcpy(ks + auth_key_len,&CPID, sizeof(CPID));
++	
++	key_len = auth_key_len + sizeof(CPID);
++
++    /* Method to (create ko) */
++
++    if (key_len > LENGTH_OF_HASH) {	
++
++        memset(&tctx, 0, sizeof(tctx));
++		sha256_starts(&tctx);
++		sha256_update(&tctx,ks, key_len);
++		sha256_finish(&tctx,tk);		      	
++
++        memcpy(ko, tk, LENGTH_OF_HASH);
++       	key_len = LENGTH_OF_HASH;
++    	}
++	else if (key_len == LENGTH_OF_HASH) {
++    	memcpy(ko, auth_key, auth_key_len);
++	}
++	else if (key_len < LENGTH_OF_HASH)
++	{
++		memset(ko, 0, sizeof(ko));
++		memcpy(ko, ks, key_len);
++        key_len = LENGTH_OF_HASH;
++	}
++	else{
++		zlog_debug("Some Error Occured!");
++	}
++
++    /*
++     * the HMAC_sha256 transform looks like:
++     *
++     * First Hash = sha256(Ko XOR ipad || OSPFv3 packet)
++     *
++     * Second Hash =  sha256(Ko XOR opad || First Hash)
++     *
++     *
++     * where Ko is an 32 byte key calculated above
++     * ipad is the byte 0x36 repeated 64 times
++     * opad is the byte 0x5c repeated 64 times
++     * and OSPFv3 packet is the data being protected 
++     */
++
++    /* start out by storing key in pads */
++    	
++	memset( k_ipad, 0, sizeof(k_ipad));
++    memcpy( k_ipad, ko, key_len);
++
++    memset( k_opad, 0, sizeof(k_opad));
++	memcpy( k_opad, ko , key_len);
++
++
++		/* XOR key with ipad and opad values */
++    	for (i=0; i<BLOCK_SIZE; i++) {
++       		k_ipad[i] ^= 0x36;
++       		k_opad[i] ^= 0x5c;
++    	}
++
++        /* First Hash (perform inner sha256) */
++        memset(&context, 0, sizeof(context));
++    	sha256_starts(&context);			/* init context for 1st pass */
++    	sha256_update(&context, k_ipad, sizeof(k_ipad));	/* start with inner pad */
++    	sha256_update(&context, oh, ntohs (oh->length)); 	/* then text of datagram */      
++    	sha256_finish(&context, first_hash);		/* finish up 1st pass */  
++    
++     	/* Second Hash (perform outer sha256) "Final Digest" */
++        memset(&context, 0, sizeof(context));
++    	sha256_starts(&context);			/* init context for 2nd pass */
++    	sha256_update(&context, k_opad, sizeof(k_opad));	/* start with outer pad */
++    	sha256_update(&context, first_hash,OSPF6_AUTH_DATA_SIZE);	/* then results of 1st hash */                
++    	sha256_finish(&context, digest);		/* finish up 2nd pass */
++
++	/* Copy the Apad in ospf6_at->auth_data Authentication data field of Authentication Trailer */
++        memcpy( calculated_auth_data , Apad,OSPF6_AUTH_DATA_SIZE );
++
++        
++        /* Copy the digest in ospf6_at->auth_data Authentication data field of Authentication Trailer */
++        memcpy( calculated_auth_data + OSPF6_AUTH_DATA_SIZE , digest,OSPF6_AUTH_DATA_SIZE );
++
++
++  /* check crypto seqnum. */
++  on = ospf6_neighbor_lookup (oh->router_id, oi);
++  if (on && ntohl(on->low_order_seqnum) > ntohl(ospf6_at->low_order_seqnum))
++    {
++      zlog_warn ("interface %s: ospf6_check_sha256 bad Low-order-sequence %d (expect %d)",
++		 oi->interface->name,
++		 ntohl(ospf6_at->low_order_seqnum),
++		 ntohl(on->ospf6_if->low_order_seqnum));
++	  
++      return 0;
++    }
++
++  if (on && ntohl(on->high_order_seqnum) > ntohl(ospf6_at->high_order_seqnum))
++    {
++      zlog_warn ("interface %s: ospf6_check_sha256 bad High-order-sequence %d (expect %d)",
++		 oi->interface->name,
++		 ntohl(ospf6_at->high_order_seqnum),
++		 ntohl(on->ospf6_if->high_order_seqnum));
++
++      return 0;
++    }
++  
++  
++ /* compare the two */
++  if (memcmp (ospf6_at->auth_data , calculated_auth_data, 2 * OSPF6_AUTH_DATA_SIZE))
++    {
++      zlog_warn ("interface %s: ospf6_check_sha256 digest mismatch",
++		 oi->interface->name);
++      return 0;
++    }
++
++  /* save neighbor's crypt_seqnum */
++  if (on)
++  {
++    on->low_order_seqnum = ospf6_at->low_order_seqnum;
++    on->high_order_seqnum = ospf6_at->high_order_seqnum;
++  }
++
++  return 1;
++}
++
++static int
++ospf6_check_auth (struct ospf6_interface *oi, struct ospf6_header *oh, struct ospfv3_crypt *ospf6_at, struct in6_addr *src)
++{
++
++  
++ struct ospf6_crypt_key *ck_recv;
++  u_int16_t iface_auth_type; //local auth type
++  u_int16_t pkt_auth_type = ospf6_at->auth_type;  //received auth type
++
++  switch (pkt_auth_type)
++  {
++  case OSPF6_AUTH_NULL: 
++    if (OSPF6_AUTH_NULL != (iface_auth_type = ospf6_auth_type (oi)))
++    {
++	if (IS_OSPF6_DEBUG_MESSAGE (oh->type, RECV))
++      zlog_warn ("interface %s: auth-type mismatch, local %s, rcvd Null", 
++		oi->interface->name, LOOKUP(ospf6_auth_type_string, iface_auth_type));
++      return MSG_NG;
++     }
++    return MSG_OK;
++ 
++
++  case OSPF6_AUTH_CRYPTOGRAPHIC: 
++    if (OSPF6_AUTH_CRYPTOGRAPHIC != (iface_auth_type = ospf6_auth_type (oi)))
++    {
++     if (IS_OSPF6_DEBUG_MESSAGE (oh->type, RECV))
++     zlog_warn ("interface %s: auth-type mismatch, local %s, rcvd Cryptographic",
++                   oi->interface->name, LOOKUP (ospf6_auth_type_string, iface_auth_type));
++      return MSG_NG;
++   }
++
++
++    /* As per RFC 6506 sec 4.2, Checksum verification should be omitted , if it does not include
++       a non-zero checksum, it will not be modified by the receiver and simply be included in   
++      calculation of Authentication Trailer message digest */
++      
++    /* SHA256 crypto method can pass ospf6_packet_examin() */
++
++
++    if (! ospf6_check_sha256_digest (oi, oh,ospf6_at,src))
++        {
++        if (IS_OSPF6_DEBUG_MESSAGE (oh->type, RECV))
++            zlog_warn ("interface %s: SHA256 auth failed", oi->interface->name);
++        return MSG_NG;
++        }
++    return MSG_OK;
++  default:
++      if (IS_OSPF6_DEBUG_MESSAGE (oh->type, RECV))
++      zlog_warn ("interface %s: invalid packet auth-type (%02x)",
++                 oi->interface->name, pkt_auth_type);
++    return MSG_NG;
++  }
++}
++
++
+ static void
+ ospf6_lsupdate_recv (struct in6_addr *src, struct in6_addr *dst,
+                      struct ospf6_interface *oi, struct ospf6_header *oh)
+@@ -1533,6 +1910,7 @@ ospf6_receive (struct thread *thread)
+   struct iovec iovector[2];
+   struct ospf6_interface *oi;
+   struct ospf6_header *oh;
++  struct ospfv3_crypt *ospf6_at ;   
+ 
+   /* add next read thread */
+   sockfd = THREAD_FD (thread);
+@@ -1574,9 +1952,20 @@ ospf6_receive (struct thread *thread)
+   if (ospf6_rxpacket_examin (oi, oh, len) != MSG_OK)
+     return 0;
+ 
++
++  /* Check Authentication of data */
++
++  /*    ospf6_at can create problem when AT bit is not set */
++  ospf6_at = (struct ospfv3_crypt *)((caddr_t) oh + ntohs (oh->length)); // Value of ospf6_at for received packet
++
++    if (ospf6_check_auth (oi, oh,ospf6_at,&src)!= MSG_OK)
++    return 0;
++
++ 
+   /* Being here means, that no sizing/alignment issues were detected in
+-     the input packet. This renders the additional checks performed below
+-     and also in the type-specific dispatching functions a dead code,
++     the input packet.It also means that if Authentication is set for the
++     interface, it has been passed. This renders the additional checks performed 
++     below and also in the type-specific dispatching functions a dead code,
+      which can be dismissed in a cleanup-focused review round later. */
+ 
+   /* Log */
+@@ -1592,10 +1981,10 @@ ospf6_receive (struct thread *thread)
+       switch (oh->type)
+         {
+           case OSPF6_MESSAGE_TYPE_HELLO:
+-            ospf6_hello_print (oh);
++            ospf6_hello_print (oh,ospf6_at);
+             break;
+           case OSPF6_MESSAGE_TYPE_DBDESC:
+-            ospf6_dbdesc_print (oh);
++            ospf6_dbdesc_print (oh,ospf6_at);
+             break;
+           case OSPF6_MESSAGE_TYPE_LSREQ:
+             ospf6_lsreq_print (oh);
+@@ -1641,6 +2030,193 @@ ospf6_receive (struct thread *thread)
+ }
+ 
+ static void
++ospf6_make_sha256_digest (struct in6_addr *src,struct ospf6_interface *oi, struct ospf6_header *oh, struct ospfv3_crypt *ospf6_at)
++{
++  const u_int8_t *auth_key;
++  struct ospf6_crypt_key *ck;
++  int i;
++  sha256_context context;
++  sha256_context tctx;
++  uint8_t Apad[LENGTH_OF_HASH];
++  uint8_t ks[35];
++  uint8_t ko[LENGTH_OF_HASH]; 
++  unsigned char k_ipad[BLOCK_SIZE];    /* inner padding - key XORd with ipad */
++  unsigned char k_opad[BLOCK_SIZE];    /* outer padding - key XORd with opad */
++  uint8_t key_len; 
++  unsigned char tk[LENGTH_OF_HASH];
++
++  unsigned char first_hash[OSPF6_AUTH_DATA_SIZE];
++
++  unsigned char digest[OSPF6_AUTH_DATA_SIZE];
++  uint8_t auth_key_len;
++  struct in6_addr src_temp;
++  
++/* Get sha-256 Authentication key from auth_crypt list. */
++  if (list_isempty (oi->auth_crypt))
++    auth_key = (const u_int8_t *) "";
++  else
++    {
++      ck = listgetdata (listtail(oi->auth_crypt));
++      auth_key = ck->auth_key;
++    }
++  
++   auth_key_len = strlen(ck->auth_key);
++
++  /*Method to (create Apad) retrieve IP address and append Apad_Last4Octets to it*/
++	memset(Apad,0, sizeof(Apad));
++  
++   memset(&src_temp,0,sizeof(struct in6_addr));
++   
++    if(src)
++	memcpy(Apad,src, sizeof (struct in6_addr));	//append the ipv6 addresss in the variable Apad
++
++   else
++      memcpy(Apad,&src_temp, sizeof (struct in6_addr));
++
++ 
++	memcpy(Apad + sizeof (struct in6_addr), Apad_Last4Octets, sizeof (Apad_Last4Octets));
++
++    /*Method to (create ks) Function for appending CPID to Authentication key K to form Ks*/
++	memset(ks, 0, 34);
++	memcpy(ks,auth_key, auth_key_len);
++	memcpy(ks + auth_key_len,&CPID, sizeof(CPID));
++	
++	key_len = auth_key_len + sizeof(CPID);
++
++    /* Method to (create ko) */
++
++    if (key_len > LENGTH_OF_HASH) {	
++
++		memset(&tctx, 0, sizeof(tctx));
++		sha256_starts(&tctx);
++		sha256_update(&tctx,ks, key_len);
++		sha256_finish(&tctx,tk);		      	
++
++       	memcpy(ko, tk, LENGTH_OF_HASH);
++       	key_len = LENGTH_OF_HASH;
++    	}
++	else if (key_len == LENGTH_OF_HASH) {
++    	memcpy(ko, auth_key, auth_key_len);
++	}
++	else if (key_len < LENGTH_OF_HASH)
++	{
++		memset(ko, 0, sizeof(ko));
++		memcpy(ko, ks, key_len);
++		key_len = LENGTH_OF_HASH;
++	}
++	else{
++		zlog_debug("Some Error Occured!");
++	}
++
++    /*
++     * the HMAC_sha256 transform looks like:
++     *
++     * First Hash = sha256(Ko XOR ipad || OSPFv3 packet)
++     *
++     * Second Hash =  sha256(Ko XOR opad || First Hash)
++     *
++     *
++     * where Ko is an 32 byte key calculated above
++     * ipad is the byte 0x36 repeated 64 times
++     * opad is the byte 0x5c repeated 64 times
++     * and OSPFv3 packet is the data being protected 
++     */
++
++    /* start out by storing key in pads */
++    	
++        memset( k_ipad, 0, sizeof(k_ipad));
++        memcpy( k_ipad, ko, sizeof(ko));
++
++        memset( k_opad, 0, sizeof(k_opad));
++		memcpy( k_opad, ko , sizeof(ko));
++    		
++
++		/* XOR key with ipad and opad values */
++    	for (i=0; i<BLOCK_SIZE; i++) {
++       		k_ipad[i] ^= 0x36;
++       		k_opad[i] ^= 0x5c;
++    	}
++
++        /* First Hash (perform inner sha256) */
++        memset(&context, 0, sizeof(context));
++    	sha256_starts(&context);			/* init context for 1st pass */
++    	sha256_update(&context, k_ipad, sizeof(k_ipad));	/* start with inner pad */
++    	sha256_update(&context, oh, ntohs (oh->length)); 	/* then text of datagram */      
++    	sha256_finish(&context, first_hash);		/* finish up 1st pass */  
++    
++     	/* Second Hash (perform outer sha256) "Final Digest" */
++        memset(&context, 0, sizeof(context));
++    	sha256_starts(&context);			/* init context for 2nd pass */
++    	sha256_update(&context, k_opad, sizeof(k_opad));	/* start with outer pad */
++    	sha256_update(&context, first_hash,OSPF6_AUTH_DATA_SIZE);	/* then results of 1st hash */                
++    	sha256_finish(&context, digest);		/* finish up 2nd pass */
++
++	/* Copy the Apad in ospf6_at->auth_data Authentication data field of Authentication Trailer */
++        memcpy( ospf6_at->auth_data, Apad,OSPF6_AUTH_DATA_SIZE );
++
++        
++        /* Copy the digest in ospf6_at->auth_data Authentication data field of Authentication Trailer */
++        memcpy( ospf6_at->auth_data + OSPF6_AUTH_DATA_SIZE , digest,OSPF6_AUTH_DATA_SIZE );
++
++}
++
++
++static void
++ospf6_make_auth(struct in6_addr *src,struct ospf6_interface *oi, struct ospf6_header *oh, struct ospfv3_crypt *ospf6_at)
++{
++struct ospf6_crypt_key *ck;
++u_int32_t t;
++
++
++  ospf6_at->auth_type = OSPF6_AUTH_CRYPTOGRAPHIC ;	/* Setting of auth type */
++  ospf6_at->reserved =0;		/* Setting of reserved field to 0 */
++
++/* Get sha-256 Authentication key-ID from auth_crypt list.*/
++  
++  /* If key is not set, then set 0. */
++  if (list_isempty (oi->auth_crypt))
++    ospf6_at->sa_id = 0 ;
++  else
++  {
++    ck = listgetdata (listtail(oi->auth_crypt));
++    ospf6_at->sa_id = ck->key_id;
++  }
++  
++/* Logic taken from ospfv2 sequence number code */
++
++  t = (time(NULL) & 0xFFFFFFFF);
++  if (t > oi->low_order_seqnum)
++      oi->low_order_seqnum = t;
++  else
++      oi->low_order_seqnum++;
++
++/* As per RFC-6506 section 4.1.1 "Sequence Number Wrap" */
++  //for lower order sequence wrap
++  if(oi->low_order_seqnum == 0xFFFFFFFF)
++  { 
++        oi->high_order_seqnum++;
++        oi->low_order_seqnum=0;
++  }
++  //for higher order sequence wrap...if higher order is filled reset higher oredr and lower order and reset keys to 0
++  if(oi->high_order_seqnum == 0xFFFFFFFF)
++  {
++        oi->high_order_seqnum = 0;
++        oi->low_order_seqnum = 0;
++        ck = listgetdata (listtail(oi->auth_crypt));
++        while(ck != NULL){
++            ospf6_crypt_key_delete (oi->auth_crypt,ck->key_id);
++        }
++  }
++
++  ospf6_at->low_order_seqnum = htonl (oi->low_order_seqnum);
++  ospf6_at->high_order_seqnum = htonl (oi->high_order_seqnum);
++  ospf6_at->auth_data_length = AUTH_TRAILER_HEADER + OSPF6_AUTH_DATA_SIZE + OSPF6_AUTH_DATA_SIZE; // Authentication data length = Authentication trailer (16 octet)+ Apad (32 Octets) + Digest (32 Octets)*/
++
++  ospf6_make_sha256_digest (src,oi,oh,ospf6_at);
++
++}
++
++static void
+ ospf6_send (struct in6_addr *src, struct in6_addr *dst,
+             struct ospf6_interface *oi, struct ospf6_header *oh)
+ {
+@@ -1648,11 +2224,12 @@ ospf6_send (struct in6_addr *src, struct
+   char srcname[64], dstname[64];
+   struct iovec iovector[2];
+ 
+-  /* initialize */
+-  iovector[0].iov_base = (caddr_t) oh;
+-  iovector[0].iov_len = ntohs (oh->length);
+-  iovector[1].iov_base = NULL;
+-  iovector[1].iov_len = 0;
++  
++  struct ospfv3_crypt *ospf6_at ;
++
++  /* Append the Authentication Trailer to OSPFv3 packet */
++
++  ospf6_at = (struct ospfv3_crypt *)((caddr_t) oh + ntohs (oh->length));
+ 
+   /* fill OSPF header */
+   oh->version = OSPFV3_VERSION;
+@@ -1664,6 +2241,38 @@ ospf6_send (struct in6_addr *src, struct
+   oh->instance_id = oi->instance_id;
+   oh->reserved = 0;
+ 
++
++    if(ospf6_auth_type(oi))
++    {
++      /* As per RFC 6506 sec 4.2, Checksum should be set to 0 prior to 
++      calculation of Authentication Trailer message digest */
++
++      oh->checksum = 0; 
++
++      ospf6_make_auth(src,oi, oh,ospf6_at);
++
++      /* Append the Authentication Trailer to OSPFv3 packet 
++      
++
++      /* initialize */
++      iovector[0].iov_base = (caddr_t) oh;
++      iovector[0].iov_len = ntohs (oh->length) + ospf6_at->auth_data_length;
++      iovector[1].iov_base = NULL;
++      iovector[1].iov_len = 0;
++             
++  }
++  else
++  {  
++     ospf6_at->auth_type = OSPF6_AUTH_NULL;
++      /* initialize */
++      iovector[0].iov_base = (caddr_t) oh;
++      iovector[0].iov_len = ntohs (oh->length);
++      iovector[1].iov_base = NULL;
++      iovector[1].iov_len = 0;
++
++  }
++   
++
+   /* Log */
+   if (IS_OSPF6_DEBUG_MESSAGE (oh->type, SEND))
+     {
+@@ -1680,10 +2289,10 @@ ospf6_send (struct in6_addr *src, struct
+       switch (oh->type)
+         {
+           case OSPF6_MESSAGE_TYPE_HELLO:
+-            ospf6_hello_print (oh);
++            ospf6_hello_print (oh,ospf6_at);
+             break;
+           case OSPF6_MESSAGE_TYPE_DBDESC:
+-            ospf6_dbdesc_print (oh);
++            ospf6_dbdesc_print (oh,ospf6_at);
+             break;
+           case OSPF6_MESSAGE_TYPE_LSREQ:
+             ospf6_lsreq_print (oh);
+@@ -1703,9 +2312,17 @@ ospf6_send (struct in6_addr *src, struct
+ 
+   /* send message */
+   len = ospf6_sendmsg (src, dst, &oi->interface->ifindex, iovector);
+-  if (len != ntohs (oh->length))
++
++    if(ospf6_auth_type(oi)){
++	if (len != (ntohs (oh->length)+ ospf6_at->auth_data_length ))
++    zlog_err ("Could not send entire message");
++	}
++ else
++	{ if (len != ntohs (oh->length))
+     zlog_err ("Could not send entire message");
+ }
++}
++
+ 
+ static uint32_t
+ ospf6_packet_max(struct ospf6_interface *oi)
+@@ -1748,6 +2365,14 @@ ospf6_hello_send (struct thread *thread)
+   hello->options[0] = oi->area->options[0];
+   hello->options[1] = oi->area->options[1];
+   hello->options[2] = oi->area->options[2];
++  
++  
++  if(oi->auth_type)
++  {
++	OSPF6_OPT_SET_AT(hello->options, OSPF6_OPT_AT);
++  }
++  
++      	
+   hello->hello_interval = htons (oi->hello_interval);
+   hello->dead_interval = htons (oi->dead_interval);
+   hello->drouter = oi->drouter;
+@@ -1821,6 +2446,13 @@ ospf6_dbdesc_send (struct thread *thread
+   dbdesc->options[0] = on->ospf6_if->area->options[0];
+   dbdesc->options[1] = on->ospf6_if->area->options[1];
+   dbdesc->options[2] = on->ospf6_if->area->options[2];
++  
++  
++  if(on->ospf6_if->auth_type)
++  {
++        OSPF6_OPT_SET_AT(dbdesc->options, OSPF6_OPT_AT);
++  }
++  
+   dbdesc->ifmtu = htons (on->ospf6_if->ifmtu);
+   dbdesc->bits = on->dbdesc_bits;
+   dbdesc->seqnum = htonl (on->dbdesc_seqnum);
+diff -upwbNr quagga-0.99.21/ospf6d/ospf6_message.h quaggaRFC6506/ospf6d/ospf6_message.h
+--- quagga-0.99.21/ospf6d/ospf6_message.h	2012-03-24 01:13:20.000000000 +0530
++++ quaggaRFC6506/ospf6d/ospf6_message.h	2013-04-08 13:35:32.000000000 +0530
+@@ -58,8 +58,36 @@ struct ospf6_header
+   u_char    reserved;
+ };
+ 
++#define OSPF6_AUTH_DATA_SIZE 		32U 	
++
++#define BLOCK_SIZE 		        64U 	
++
++#define LENGTH_OF_HASH 		        32U 	
++
++#define AUTH_TRAILER_HEADER         	16U  	
++
++#define OSPF6_AUTH_NULL             	0    	
++
++#define OSPF6_AUTH_CRYPTOGRAPHIC    	1    	
++
++
+ #define OSPF6_MESSAGE_END(H) ((caddr_t) (H) + ntohs ((H)->length))
+ 
++
++/* Authentication Trailer Structure */
++struct ospfv3_crypt             
++{
++	u_int16_t   auth_type; //= OSPF6_AUTH_NULL;
++	u_int16_t   auth_data_length;
++	u_int16_t   reserved;
++	u_int16_t   sa_id;
++	u_int32_t   high_order_seqnum;
++	u_int32_t   low_order_seqnum;
++	u_char auth_data[OSPF6_AUTH_DATA_SIZE + OSPF6_AUTH_DATA_SIZE];
++
++};
++
++
+ /* Hello */
+ #define OSPF6_HELLO_MIN_SIZE                  20U
+ struct ospf6_hello
+@@ -116,8 +144,8 @@ struct ospf6_lsupdate
+ /* It is just a sequence of LSA Headers */
+ 
+ /* Function definition */
+-extern void ospf6_hello_print (struct ospf6_header *);
+-extern void ospf6_dbdesc_print (struct ospf6_header *);
++extern void ospf6_hello_print (struct ospf6_header * , struct ospfv3_crypt *);    
++extern void ospf6_dbdesc_print (struct ospf6_header * , struct ospfv3_crypt *);    
+ extern void ospf6_lsreq_print (struct ospf6_header *);
+ extern void ospf6_lsupdate_print (struct ospf6_header *);
+ extern void ospf6_lsack_print (struct ospf6_header *);
+diff -upwbNr quagga-0.99.21/ospf6d/ospf6_neighbor.c quaggaRFC6506/ospf6d/ospf6_neighbor.c
+--- quagga-0.99.21/ospf6d/ospf6_neighbor.c	2010-08-12 18:29:32.000000000 +0530
++++ quaggaRFC6506/ospf6d/ospf6_neighbor.c	2013-04-08 13:35:28.000000000 +0530
+@@ -69,8 +69,11 @@ ospf6_neighbor_lookup (u_int32_t router_
+ }
+ 
+ /* create ospf6_neighbor */
++
++/* ospf6_at added as parameter in order to update sequence no. */
++
+ struct ospf6_neighbor *
+-ospf6_neighbor_create (u_int32_t router_id, struct ospf6_interface *oi)
++ospf6_neighbor_create (u_int32_t router_id, struct ospf6_interface *oi, struct ospfv3_crypt *ospf6_at)   
+ {
+   struct ospf6_neighbor *on;
+   char buf[16];
+@@ -101,6 +104,16 @@ ospf6_neighbor_create (u_int32_t router_
+   on->lsupdate_list = ospf6_lsdb_create (on);
+   on->lsack_list = ospf6_lsdb_create (on);
+ 
++  
++
++  /* if Authentication is enabled, auth_type will be non-zero value, it will update the higher and lower cryt seq no. */
++  if(ospf6_at->auth_type)
++  {
++      on->low_order_seqnum = ospf6_at->low_order_seqnum;
++      on->high_order_seqnum = ospf6_at->high_order_seqnum;
++  }
++  
++
+   listnode_add_sort (oi->neighbor_list, on);
+   return on;
+ }
+diff -upwbNr quagga-0.99.21/ospf6d/ospf6_neighbor.h quaggaRFC6506/ospf6d/ospf6_neighbor.h
+--- quagga-0.99.21/ospf6d/ospf6_neighbor.h	2010-08-12 18:29:32.000000000 +0530
++++ quaggaRFC6506/ospf6d/ospf6_neighbor.h	2013-04-08 13:35:26.000000000 +0530
+@@ -93,6 +93,12 @@ struct ospf6_neighbor
+   struct thread *thread_send_lsreq;
+   struct thread *thread_send_lsupdate;
+   struct thread *thread_send_lsack;
++
++  u_int32_t high_order_seqnum;		/* higher order Cryptographic Sequence Number */
++
++  u_int32_t low_order_seqnum;		/* lower order Cryptographic Sequence Number */
++
++  
+ };
+ 
+ /* Neighbor state */
+@@ -115,7 +121,7 @@ void ospf6_neighbor_dbex_init (struct os
+ struct ospf6_neighbor *ospf6_neighbor_lookup (u_int32_t,
+                                               struct ospf6_interface *);
+ struct ospf6_neighbor *ospf6_neighbor_create (u_int32_t,
+-                                              struct ospf6_interface *);
++                                              struct ospf6_interface *, struct ospfv3_crypt *);     
+ void ospf6_neighbor_delete (struct ospf6_neighbor *);
+ 
+ /* Neighbor event */
+diff -upwbNr quagga-0.99.21/ospf6d/ospf6_proto.c quaggaRFC6506/ospf6d/ospf6_proto.c
+--- quagga-0.99.21/ospf6d/ospf6_proto.c	2012-03-24 01:13:20.000000000 +0530
++++ quaggaRFC6506/ospf6d/ospf6_proto.c	2013-04-08 13:35:22.000000000 +0530
+@@ -71,14 +71,17 @@ ospf6_capability_printbuf (char capabili
+ void
+ ospf6_options_printbuf (u_char *options, char *buf, int size)
+ {
+-  const char *dc, *r, *n, *mc, *e, *v6;
++  const char *dc, *r, *n, *mc, *e, *v6, *at; 
++
+   dc = (OSPF6_OPT_ISSET (options, OSPF6_OPT_DC) ? "DC" : "--");
+   r  = (OSPF6_OPT_ISSET (options, OSPF6_OPT_R)  ? "R"  : "-" );
+   n  = (OSPF6_OPT_ISSET (options, OSPF6_OPT_N)  ? "N"  : "-" );
+   mc = (OSPF6_OPT_ISSET (options, OSPF6_OPT_MC) ? "MC" : "--");
+   e  = (OSPF6_OPT_ISSET (options, OSPF6_OPT_E)  ? "E"  : "-" );
+   v6 = (OSPF6_OPT_ISSET (options, OSPF6_OPT_V6) ? "V6" : "--");
+-  snprintf (buf, size, "%s|%s|%s|%s|%s|%s", dc, r, n, mc, e, v6);
+-}
+ 
+ 
++  at = (OSPF6_OPT_ISSET_AT (options, OSPF6_OPT_AT) ? "AT" : "--");
++  snprintf (buf, size, "|%s|-|--|--|--|%s|%s|%s|%s|%s|%s", at, dc, r, n, mc, e, v6);
++
++}
+diff -upwbNr quagga-0.99.21/ospf6d/ospf6_proto.h quaggaRFC6506/ospf6d/ospf6_proto.h
+--- quagga-0.99.21/ospf6d/ospf6_proto.h	2012-03-24 01:13:20.000000000 +0530
++++ quaggaRFC6506/ospf6d/ospf6_proto.h	2013-04-08 13:35:20.000000000 +0530
+@@ -60,6 +60,11 @@
+ 
+ /* OSPF options */
+ /* present in HELLO, DD, LSA */
++
++#define OSPF6_OPT_SET_AT(x,opt)   ((x)[1] |=  (opt))
++#define OSPF6_OPT_ISSET_AT(x,opt) ((x)[1] &   (opt))
++#define OSPF6_OPT_CLEAR_AT(x,opt) ((x)[1] &= ~(opt))
++
+ #define OSPF6_OPT_SET(x,opt)   ((x)[2] |=  (opt))
+ #define OSPF6_OPT_ISSET(x,opt) ((x)[2] &   (opt))
+ #define OSPF6_OPT_CLEAR(x,opt) ((x)[2] &= ~(opt))
+@@ -72,6 +77,8 @@
+ #define OSPF6_OPT_E  (1 << 1)   /* AS External Capability */
+ #define OSPF6_OPT_V6 (1 << 0)   /* IPv6 forwarding Capability */
+ 
++#define OSPF6_OPT_AT (1 << 2)   /* Authentication Capability */  
++
+ /* OSPF6 Prefix */
+ #define OSPF6_PREFIX_MIN_SIZE                  4U /* .length == 0 */
+ struct ospf6_prefix

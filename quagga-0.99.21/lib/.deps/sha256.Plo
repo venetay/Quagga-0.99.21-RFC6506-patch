@@ -1,0 +1,26 @@
+sha256.lo: sha256.c /usr/include/string.h /usr/include/features.h \
+ /usr/include/bits/predefs.h /usr/include/sys/cdefs.h \
+ /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h \
+ /usr/include/gnu/stubs-32.h \
+ /tmp/tcloop/gcc/usr/local/bin/../lib/gcc/i686-pc-linux-gnu/4.6.1/include/stddef.h \
+ /usr/include/xlocale.h sha256.h
+
+/usr/include/string.h:
+
+/usr/include/features.h:
+
+/usr/include/bits/predefs.h:
+
+/usr/include/sys/cdefs.h:
+
+/usr/include/bits/wordsize.h:
+
+/usr/include/gnu/stubs.h:
+
+/usr/include/gnu/stubs-32.h:
+
+/tmp/tcloop/gcc/usr/local/bin/../lib/gcc/i686-pc-linux-gnu/4.6.1/include/stddef.h:
+
+/usr/include/xlocale.h:
+
+sha256.h:

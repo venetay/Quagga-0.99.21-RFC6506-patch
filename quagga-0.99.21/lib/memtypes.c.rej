@@ -1,0 +1,10 @@
+--- memtypes.c	2012-05-01 21:40:28.000000000 +0530
++++ memtypes.c	2013-02-05 14:18:50.000000000 +0530
+@@ -216,6 +216,7 @@
+ {
+   { MTYPE_OSPF6_TOP,          "OSPF6 top"			},
+   { MTYPE_OSPF6_AREA,         "OSPF6 area"			},
++  { MTYPE_OSPF6_CRYPT_KEY,    "OSPF6 crypt key"			},  
+   { MTYPE_OSPF6_IF,           "OSPF6 interface"			},
+   { MTYPE_OSPF6_NEIGHBOR,     "OSPF6 neighbor"			},
+   { MTYPE_OSPF6_ROUTE,        "OSPF6 route"			},
