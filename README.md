@@ -1,6 +1,6 @@
 # Quagga-0.99.21 RFC6506-patch
 
-Th RFC6506 patch is applied to the code 
+The RFC6506 patch is applied to the code 
 
 Steps to test/run the developed patch file on quagga-0.99.21 : 
 As per RFC, implementation is done by TCS in order to provide 
